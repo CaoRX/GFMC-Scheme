@@ -3,9 +3,12 @@
 #include <iostream>
 #include <vector>
 
+using namespace std;
+
 SquareDimer2D::SquareDimer2D() {
     n = nn; m = mm; V = VV;
     VOffSet = (V > 0) ? V : 0;
+    // VOffSet >= V, so V - VOffset < 0
 
     int bondN = n * m * 2;
     dMem = new bool[bondN];
@@ -114,9 +117,13 @@ double SquareDimer2D::walk() {
             }
         }
     }
+    // instead of V only on FPs, VOffset is on all the plaquettes
+    // so our hamiltonian with -1.0 on the off-diagonal, and V - VOffset for FP, -VOffset on others
+    // we choose VOffset > V
     // std::cout << "countFP = " << countFP << std::endl;
-    b = (-currV + 1.0) * countFP;
-    double stopPoss = (-currV) / (-currV + 1.0);
+    b = (-currV + 1.0) * countFP + (VOffSet * (n * m - countFP));
+
+    double stopPoss = ((-currV) * countFP + (VOffSet * (n * m - countFP))) / b;
     if (randomDouble() < stopPoss) {
         return b;
     }
@@ -127,6 +134,31 @@ double SquareDimer2D::walk() {
     return b;
 }
 
+double SquareDimer2D::getB() {
+    double currV = V - VOffSet; // negative
+    double b = 0.0;
+    int countFP = 0;
+    for (int x = 0; x < n; ++x) {
+        for (int y = 0; y < m; ++y) {
+            if (isFP(x, y)) {
+                countFP += 1;
+            }
+        }
+    }
+    // std::cout << "countFP = " << countFP << std::endl;
+    // b = (-currV + 1.0) * countFP;
+    b = (-currV + 1.0) * countFP + (VOffSet * (n * m - countFP));
+    return b;
+}
+
+double SquareDimer2D::energyOffset() {
+    // we add -VOffSet for every plaquette
+    // so after we got e as the eigenvalue of the -H
+    // as we have substracted VOffset * (m * n) diagonally from H
+    // we should have the real energy -e + (m * n) * VOffSet
+    return (m * n) * VOffSet;
+}
+
 ULL SquareDimer2D::hash() {
     ULL res = 0;
     for (int i = 0; i < n * m * 2; ++i) {
@@ -135,6 +167,22 @@ ULL SquareDimer2D::hash() {
         }
     }
     return res;
+}
+
+vector<double> SquareDimer2D::measureCorrelation() {
+    double originDimer = dimerToDouble(get(0, 0, 0));
+    vector<double> res(2 * n * m);
+    for (int dir = 0; dir < 2; ++dir) {
+        for (int x = 0; x < n; ++x) {
+            for (int y = 0; y < m; ++y) {
+                res[dir * m * n + x * m + y] = dimerToDouble(get(dir, x, y)) * originDimer;
+            }
+        }
+    }
+    return res;
+}
+double SquareDimer2D::dimerToDouble(bool dimer) {
+    return dimer ? 0.75 : -0.25;
 }
 
 SquareDimer2D::~SquareDimer2D() {

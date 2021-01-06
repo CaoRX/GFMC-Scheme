@@ -1,6 +1,8 @@
 #pragma once
 
 #include "settings.hpp"
+#include <vector>
+using namespace std;
 
 const int pDimerDx[4] = {0, 0, 0, 1};
 const int pDimerDy[4] = {0, 0, 1, 0};
@@ -37,5 +39,10 @@ public:
     void flipWinding();
 
     double walk();
+    double getB();
     ULL hash();
+
+    double energyOffset();
+    vector<double> measureCorrelation();
+    double dimerToDouble(bool dimer);
 };
