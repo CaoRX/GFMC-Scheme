@@ -28,6 +28,8 @@ public:
     int greenL;
     vector<vector<double> > G;
 
+    vector<vector<double> > corr;
+
     GFMCScheme(int _kb, int _M);
     void walkOneStep();
     void reconfiguration();
@@ -36,7 +38,9 @@ public:
     double GSEnergy();
     double averageGSEnergy();
     double greenAverageGSEnergy();
+    vector<double> greenAverageGSCorr(int rN);
     void generateG(int maxL, int maxN);
+    vector<double> averageCorr();
 };
 
 template<typename Conf>
@@ -59,7 +63,7 @@ Walker<Conf> Walker<Conf>::copy() {
 template<typename Conf>
 GFMCScheme<Conf>::GFMCScheme(int _kb, int _M): kb(_kb), M(_M) {
     walkers = vector<Walker<Conf> >(M);
-    greenL = 0; retardN = 0;
+    greenL = 1; retardN = 0;
 }
 template<typename Conf>
 void GFMCScheme<Conf>::walkOneStep() {
@@ -91,6 +95,7 @@ void GFMCScheme<Conf>::reconfiguration() {
     newWalkers.clear();
 }
 
+
 template<typename Conf>
 void GFMCScheme<Conf>::simulate(int loops) {
     for (int i = 0; i < loops; ++i) {
@@ -98,9 +103,33 @@ void GFMCScheme<Conf>::simulate(int loops) {
         walkOneStep();
         if ((i + 1) % kb == 0) {
             energy.push_back(GSEnergy());
+            corr.push_back(averageCorr());
             reconfiguration();
         }
     }
+}
+
+template<typename Conf>
+vector<double> GFMCScheme<Conf>::averageCorr() {
+    // for all correlation functions
+    double wSum = 0.0;
+    vector<double> res = walkers[0].conf.measureCorrelation();
+    int n = res.size();
+    for (int i = 0; i < n; ++i) {
+        res[i] *= walkers[0].w;
+    }
+    wSum += walkers[0].w;
+    for (int i = 1; i < M; ++i) {
+        vector<double> corr = walkers[i].conf.measureCorrelation();
+        wSum += walkers[i].w;
+        for (int j = 0; j < n; ++j) {
+            res[j] += corr[j] * walkers[i].w;
+        }
+    }
+    for (int i = 0; i < n; ++i) {
+        res[i] /= wSum;
+    }
+    return res;
 }
 
 template<typename Conf>
@@ -134,6 +163,32 @@ double GFMCScheme<Conf>::greenAverageGSEnergy() {
     }
     return -tot / totw + walkers[0].conf.energyOffset();
 }
+template<typename Conf>
+vector<double> GFMCScheme<Conf>::greenAverageGSCorr(int rN) {
+    // consider rN <= retardN
+    if (rN > retardN) {
+        cout << "Error: maximum retarded N = " << retardN << ", but rN = " << rN << " is given." << endl;
+        return vector<double>(corr[0].size(), 0.0);
+    }
+    vector<double> tot(corr[0].size(), 0.0);
+    double totw = 0.0;
+    // use G[L + N][i + N] as the real weight of i
+    int n = G[0].size();
+    int idx = greenL + rN - 1;
+    for (int i = 0; i + rN < n; ++i) {
+
+        totw += G[idx][i + rN];
+        for (int j = 0; j < tot.size(); ++j) {
+            tot[j] += G[idx][i + rN] * corr[i][j];
+        }
+    }
+    for (int i = 0; i < tot.size(); ++i) {
+        tot[i] /= totw;
+    }
+    return tot;
+}
+
+#define NOTHING_JUST_A_TEST
 
 template<typename Conf>
 void GFMCScheme<Conf>::generateG(int maxL, int maxN) {
